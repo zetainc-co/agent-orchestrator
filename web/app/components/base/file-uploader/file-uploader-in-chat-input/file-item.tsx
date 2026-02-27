@@ -47,14 +47,16 @@ const FileItem = ({
     tmp_preview_url = URL.createObjectURL(file.originalFile.slice()).toString()
   const download_url = url ? `${url}&as_attachment=true` : base64Url
 
+  const isPdf = type?.split('/')[1] === 'pdf' || ext?.toLowerCase() === 'pdf'
+  const isUploaded = fileIsUploaded(file)
+
   return (
     <>
       <div
         className={cn(
-          'group/file-item relative h-[68px] w-[144px] rounded-lg border-[0.5px] border-components-panel-border bg-components-card-bg p-2 shadow-xs',
-          !uploadError && 'hover:bg-components-card-bg-alt',
-          uploadError && 'border border-state-destructive-border bg-state-destructive-hover',
-          uploadError && 'bg-state-destructive-hover-alt hover:border-[0.5px] hover:border-state-destructive-border',
+          'group/file-item relative w-[220px] rounded-xl border border-components-panel-border bg-components-card-bg shadow-sm transition-all duration-150',
+          !uploadError && 'hover:border-components-panel-border-bold hover:shadow-md hover:bg-components-card-bg-alt',
+          uploadError && 'border-state-destructive-border bg-state-destructive-hover',
         )}
       >
         {
@@ -68,66 +70,71 @@ const FileItem = ({
           )
         }
         <div
-          className="system-xs-medium mb-1 line-clamp-2 h-8 cursor-pointer break-all text-text-tertiary"
-          title={name}
+          className={cn('flex items-center gap-2.5 px-3 py-2.5', canPreview && 'cursor-pointer')}
           onClick={() => canPreview && setPreviewUrl(tmp_preview_url || '')}
         >
-          {name}
-        </div>
-        <div className="relative flex items-center justify-between">
-          <div className="system-2xs-medium-uppercase flex items-center text-text-tertiary">
+          {/* File type icon — larger for PDF */}
+          <div className={cn(
+            'flex shrink-0 items-center justify-center rounded-lg',
+            isPdf ? 'h-9 w-9 bg-[#FEE2E2]' : 'h-8 w-8 bg-components-card-bg-alt',
+          )}>
             <FileTypeIcon
-              size="sm"
+              size={isPdf ? 'lg' : 'md'}
               type={getFileAppearanceType(name, type)}
-              className="mr-1"
             />
-            {
-              ext && (
-                <>
-                  {ext}
-                  <div className="mx-1">·</div>
-                </>
-              )
-            }
-            {
-              !!file.size && formatFileSize(file.size)
-            }
           </div>
-          {
-            showDownloadAction && download_url && (
+
+          {/* Name + meta */}
+          <div className="min-w-0 flex-1">
+            <div
+              className="truncate text-[13px] font-medium leading-tight text-text-primary"
+              title={name}
+            >
+              {name}
+            </div>
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-text-tertiary">
+              {ext && (
+                <span className={cn(
+                  'rounded px-1 py-0.5 font-semibold uppercase leading-none tracking-wide',
+                  isPdf ? 'bg-[#FEE2E2] text-[#DC2626]' : 'bg-components-card-bg-alt text-text-tertiary',
+                )}>
+                  {ext}
+                </span>
+              )}
+              {!!file.size && (
+                <span className="text-text-tertiary">{formatFileSize(file.size)}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Download / progress / retry — always visible when uploaded */}
+          <div className="ml-auto shrink-0">
+            {showDownloadAction && download_url && isUploaded && (
               <ActionButton
                 size="m"
-                className="absolute -right-1 -top-1 hidden group-hover/file-item:flex"
+                className="flex"
                 onClick={(e) => {
                   e.stopPropagation()
                   downloadUrl({ url: download_url || '', fileName: name, target: '_blank' })
                 }}
               >
-                <RiDownloadLine className="h-3.5 w-3.5 text-text-tertiary" />
+                <RiDownloadLine className="h-4 w-4 text-text-secondary" />
               </ActionButton>
-            )
-          }
-          {
-            progress >= 0 && !fileIsUploaded(file) && (
-              <ProgressCircle
-                percentage={progress}
-                size={12}
-                className="shrink-0"
-              />
-            )
-          }
-          {
-            uploadError && (
+            )}
+            {progress >= 0 && !isUploaded && (
+              <ProgressCircle percentage={progress} size={14} className="shrink-0" />
+            )}
+            {uploadError && (
               <ReplayLine
-                className="h-4 w-4 text-text-tertiary"
+                className="h-4 w-4 text-state-destructive-text"
                 onClick={() => onReUpload?.(id)}
               />
-            )
-          }
+            )}
+          </div>
         </div>
       </div>
       {
-        type.split('/')[0] === 'audio' && canPreview && previewUrl && (
+        type?.split('/')[0] === 'audio' && canPreview && previewUrl && (
           <AudioPreview
             title={name}
             url={previewUrl}
@@ -136,7 +143,7 @@ const FileItem = ({
         )
       }
       {
-        type.split('/')[0] === 'video' && canPreview && previewUrl && (
+        type?.split('/')[0] === 'video' && canPreview && previewUrl && (
           <VideoPreview
             title={name}
             url={previewUrl}
@@ -145,7 +152,7 @@ const FileItem = ({
         )
       }
       {
-        type.split('/')[1] === 'pdf' && canPreview && previewUrl && (
+        type?.split('/')[1] === 'pdf' && canPreview && previewUrl && (
           <PdfPreview url={previewUrl} onCancel={() => { setPreviewUrl('') }} />
         )
       }

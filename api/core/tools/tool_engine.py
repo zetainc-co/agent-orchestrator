@@ -12,6 +12,8 @@ from yarl import URL
 from core.app.entities.app_invoke_entities import InvokeFrom
 from core.callback_handler.agent_tool_callback_handler import DifyAgentCallbackHandler
 from core.callback_handler.workflow_tool_callback_handler import DifyWorkflowCallbackHandler
+from core.file import FileType
+from core.file.models import FileTransferMethod
 from core.ops.ops_trace_manager import TraceQueueManager
 from core.tools.__base.tool import Tool
 from core.tools.entities.tool_entities import (
@@ -31,8 +33,6 @@ from core.tools.errors import (
 )
 from core.tools.utils.message_transformer import ToolFileMessageTransformer, safe_json_value
 from core.tools.workflow_as_tool.tool import WorkflowTool
-from core.workflow.file import FileType
-from core.workflow.file.models import FileTransferMethod
 from extensions.ext_database import db
 from models.enums import CreatorUserRole
 from models.model import Message, MessageFile
@@ -308,6 +308,19 @@ class ToolEngine:
 
                 yield ToolInvokeMessageBinary(
                     mimetype=response.meta.get("mime_type", "application/octet-stream"),
+                    url=cast(ToolInvokeMessage.TextMessage, response.message).text,
+                )
+            elif response.type == ToolInvokeMessage.MessageType.BINARY_LINK:
+                # binary file stored in tool storage (e.g. PDF, docx) — always yield as attachment
+                mimetype = (response.meta or {}).get("mime_type", "application/octet-stream")
+                with contextlib.suppress(Exception):
+                    url_obj = URL(cast(ToolInvokeMessage.TextMessage, response.message).text)
+                    if not mimetype or mimetype == "application/octet-stream":
+                        guess_type_result, _ = guess_type(f"a{url_obj.suffix}")
+                        if guess_type_result:
+                            mimetype = guess_type_result
+                yield ToolInvokeMessageBinary(
+                    mimetype=mimetype,
                     url=cast(ToolInvokeMessage.TextMessage, response.message).text,
                 )
             elif response.type == ToolInvokeMessage.MessageType.LINK:

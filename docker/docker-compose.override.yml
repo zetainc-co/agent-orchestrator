@@ -1,0 +1,4 @@
+services:
+  ssrf_proxy:
+    volumes:
+      - ./conf.d/allow-local-api.conf:/etc/squid/conf.d/allow-local-api.conf:ro

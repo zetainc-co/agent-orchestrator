@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SebasDevp AI Token Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 24px; }
+
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+
+    /* Config */
+    .config { background: #1e2130; border: 1px solid #2d3450; border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+    .config label { display: block; font-size: 11px; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .config input { width: 100%; background: #0f1117; border: 1px solid #2d3450; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
+    .config input:focus { border-color: #6366f1; }
+    .btn { background: #6366f1; color: white; border: none; border-radius: 6px; padding: 9px 20px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .btn:hover { background: #5254cc; }
+    .btn.stop { background: #ef4444; }
+    .btn.stop:hover { background: #dc2626; }
+
+    /* Status bar */
+    .status-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .dot.active { background: #22c55e; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* Summary cards */
+    .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+    .card { background: #1e2130; border: 1px solid #2d3450; border-radius: 10px; padding: 16px; }
+    .card .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .card .value { font-size: 24px; font-weight: 700; }
+    .card .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .card.green .value { color: #22c55e; }
+    .card.blue .value { color: #60a5fa; }
+    .card.purple .value { color: #a78bfa; }
+    .card.orange .value { color: #fb923c; }
+    .card.red .value { color: #f87171; }
+
+    /* Chart */
+    .chart-container { background: #1e2130; border: 1px solid #2d3450; border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+    .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #94a3b8; }
+    .chart { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+    .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .bar { width: 100%; background: #6366f1; border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; }
+    .bar-label { font-size: 9px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
+
+    /* Table */
+    .table-container { background: #1e2130; border: 1px solid #2d3450; border-radius: 10px; overflow: hidden; }
+    .table-header { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d3450; }
+    .table-header h3 { font-size: 13px; font-weight: 600; }
+    .refresh-info { font-size: 11px; color: #475569; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 10px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; background: #161826; border-bottom: 1px solid #2d3450; }
+    td { padding: 10px 16px; border-bottom: 1px solid #1a1e2e; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1a1e2e; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .badge.success { background: #14532d; color: #4ade80; }
+    .badge.error { background: #450a0a; color: #f87171; }
+    .model-tag { background: #1e293b; border: 1px solid #334155; border-radius: 4px; padding: 2px 6px; font-size: 11px; color: #94a3b8; }
+    .empty { text-align: center; padding: 40px; color: #475569; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<h1>Dify Token Monitor</h1>
+<p class="subtitle">Consumo en tiempo real · Auto-refresh cada 15s</p>
+
+<div class="config">
+  <div>
+    <label>Proxy URL</label>
+    <input id="baseUrl" type="text" value="http://localhost:8100" placeholder="http://localhost:8100" />
+  </div>
+  <div style="grid-column: span 3; display:flex; align-items:center; background:#14532d; border-radius:6px; padding: 8px 12px; font-size:12px; color:#4ade80;">
+    ✅ DEMO ACTIVO · Conectado directo a la base de datos
+  </div>
+  <div>
+    <button class="btn" id="toggleBtn" onclick="toggle()">Iniciar</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="dot" id="dot"></div>
+  <span id="statusText">Detenido · Presiona Iniciar</span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:11px;color:#475569">Filtrar agente:</span>
+    <select id="appFilter" onchange="render()" style="background:#1e2130;border:1px solid #2d3450;border-radius:6px;padding:4px 8px;color:#e2e8f0;font-size:12px;outline:none;">
+      <option value="">Todos los agentes</option>
+    </select>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card blue">
+    <div class="label">Tokens totales</div>
+    <div class="value" id="totalTokens">—</div>
+    <div class="sub">esta sesión de monitoreo</div>
+  </div>
+  <div class="card green">
+    <div class="label">Costo estimado</div>
+    <div class="value" id="totalCost">—</div>
+    <div class="sub">USD · dólares americanos</div>
+  </div>
+  <div class="card purple">
+    <div class="label">Conversaciones</div>
+    <div class="value" id="totalConvs">—</div>
+    <div class="sub">con actividad</div>
+  </div>
+  <div class="card orange">
+    <div class="label">Tokens promedio</div>
+    <div class="value" id="avgTokens">—</div>
+    <div class="sub">por mensaje</div>
+  </div>
+  <div class="card red">
+    <div class="label">Mensajes totales</div>
+    <div class="value" id="totalMsgs">—</div>
+    <div class="sub">procesados</div>
+  </div>
+</div>
+
+<div class="chart-container">
+  <div class="chart-title">Tokens por conversación (últimas 20)</div>
+  <div class="chart" id="chart"></div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <h3>Detalle de mensajes</h3>
+    <span class="refresh-info" id="lastUpdate">—</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Hora</th>
+        <th>Agente</th>
+        <th>Pregunta</th>
+        <th>Tokens entrada</th>
+        <th>Tokens salida</th>
+        <th>Total tokens</th>
+        <th>Costo USD</th>
+        <th>Latencia</th>
+        <th>Modelo</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td colspan="8" class="empty">Presiona Iniciar para comenzar a monitorear</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  let interval = null
+  let running = false
+  let allMessages = []
+
+  // Precios por 1M tokens (input / output) en USD
+  const PRICING = {
+    'gemini-1.5-flash':   { in: 0.075,  out: 0.30  },
+    'gemini-1.5-pro':     { in: 1.25,   out: 5.00  },
+    'gemini-2.0-flash':   { in: 0.10,   out: 0.40  },
+    'gpt-4o':             { in: 2.50,   out: 10.00 },
+    'gpt-4o-mini':        { in: 0.15,   out: 0.60  },
+    'gpt-3.5-turbo':      { in: 0.50,   out: 1.50  },
+    'claude-3-5-sonnet':  { in: 3.00,   out: 15.00 },
+    'default':            { in: 0.075,  out: 0.30  },
+  }
+
+  function calcCost(model, inputTokens, outputTokens) {
+    const key = Object.keys(PRICING).find(k => (model || '').toLowerCase().includes(k)) || 'default'
+    const p = PRICING[key]
+    return (inputTokens / 1e6) * p.in + (outputTokens / 1e6) * p.out
+  }
+
+  function formatCost(usd) {
+    if (usd < 0.01) return '$' + usd.toFixed(4)
+    return '$' + usd.toFixed(2)
+  }
+
+  function formatNum(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k'
+    return n.toString()
+  }
+
+  function toggle() {
+    if (running) stop(); else start()
+  }
+
+  function start() {
+    running = true
+    document.getElementById('toggleBtn').textContent = 'Detener'
+    document.getElementById('toggleBtn').classList.add('stop')
+    document.getElementById('dot').classList.add('active')
+    fetch_data()
+    interval = setInterval(fetch_data, 15000)
+  }
+
+  function stop() {
+    running = false
+    clearInterval(interval)
+    document.getElementById('toggleBtn').textContent = 'Iniciar'
+    document.getElementById('toggleBtn').classList.remove('stop')
+    document.getElementById('dot').classList.remove('active')
+    setStatus('Detenido')
+  }
+
+  function setStatus(msg) {
+    document.getElementById('statusText').textContent = msg
+  }
+
+  async function fetch_data() {
+    const proxyUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '')
+    setStatus('Consultando métricas...')
+    try {
+      const res = await fetch(`${proxyUrl}/metrics`)
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ¿está corriendo monitor-proxy.py?`)
+      const data = await res.json()
+      processLogs(data)
+    } catch (err) {
+      setStatus(`Error: ${err.message}`)
+      console.error(err)
+    }
+  }
+
+  function processLogs(logs) {
+    allMessages = logs.map(m => ({
+      id:             m.id,
+      created_at:     m.created_at,
+      query:          m.query || '',
+      message_tokens: m.message_tokens || 0,
+      answer_tokens:  m.answer_tokens  || 0,
+      total_tokens:   (m.message_tokens || 0) + (m.answer_tokens || 0),
+      total_price:    parseFloat(m.total_price || 0),
+      model:          m.model || '',
+      status:         m.status || 'normal',
+      conv_id:        m.conv_id || m.id,
+      conv_name:      m.conv_name || 'Sin nombre',
+      app_name:       m.app_name || 'Sin nombre',
+      latency:        m.latency || '—',
+    }))
+
+    // Actualizar filtro de agentes
+    const apps = [...new Set(allMessages.map(m => m.app_name))].filter(Boolean)
+    const sel = document.getElementById('appFilter')
+    const current = sel.value
+    sel.innerHTML = '<option value="">Todos los agentes</option>' +
+      apps.map(a => `<option value="${a}" ${a === current ? 'selected' : ''}>${a}</option>`).join('')
+
+    render()
+    const now = new Date().toLocaleTimeString('es-CO')
+    document.getElementById('lastUpdate').textContent = `Actualizado: ${now}`
+    setStatus(`Activo · ${allMessages.length} mensajes · refresh en 15s`)
+  }
+
+  function render() {
+    if (!allMessages.length) return
+
+    const filterApp = document.getElementById('appFilter').value
+    const msgs = filterApp ? allMessages.filter(m => m.app_name === filterApp) : allMessages
+
+    const totalTokens = msgs.reduce((s, m) => s + m.total_tokens, 0)
+    const totalCost   = msgs.reduce((s, m) => s + (m.total_price > 0 ? m.total_price : calcCost(m.model, m.message_tokens, m.answer_tokens)), 0)
+    const convIds     = new Set(msgs.map(m => m.conv_id))
+    const avgTokens   = msgs.length ? Math.round(totalTokens / msgs.length) : 0
+
+    document.getElementById('totalTokens').textContent = formatNum(totalTokens)
+    document.getElementById('totalCost').textContent   = formatCost(totalCost)
+    document.getElementById('totalConvs').textContent  = convIds.size
+    document.getElementById('avgTokens').textContent   = formatNum(avgTokens)
+    document.getElementById('totalMsgs').textContent   = msgs.length
+
+    // Chart
+    const byConv = {}
+    for (const m of msgs) {
+      byConv[m.conv_id] = byConv[m.conv_id] || { name: m.conv_name, tokens: 0 }
+      byConv[m.conv_id].tokens += m.total_tokens
+    }
+    const convList = Object.values(byConv).sort((a, b) => b.tokens - a.tokens).slice(0, 20)
+    const maxT = Math.max(...convList.map(c => c.tokens), 1)
+    document.getElementById('chart').innerHTML = convList.map(c => `
+      <div class="bar-wrap" title="${c.name}: ${c.tokens} tokens">
+        <div class="bar" style="height:${Math.max(4, (c.tokens / maxT) * 76)}px"></div>
+        <div class="bar-label">${formatNum(c.tokens)}</div>
+      </div>
+    `).join('')
+
+    // Table
+    const sorted = [...msgs].sort((a, b) => b.created_at - a.created_at)
+    document.getElementById('tableBody').innerHTML = sorted.map(m => {
+      const cost = m.total_price > 0 ? m.total_price : calcCost(m.model, m.message_tokens, m.answer_tokens)
+      const time = new Date(m.created_at * 1000).toLocaleTimeString('es-CO')
+      const q = (m.query || '').slice(0, 55) + ((m.query || '').length > 55 ? '…' : '')
+      const isErr = m.status === 'error'
+      return `
+        <tr>
+          <td style="color:#64748b;white-space:nowrap">${time}</td>
+          <td><span class="model-tag" style="color:#c084fc;border-color:#7c3aed">${m.app_name || '—'}</span></td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.query}">${q || '—'}</td>
+          <td style="color:#60a5fa">${formatNum(m.message_tokens)}</td>
+          <td style="color:#a78bfa">${formatNum(m.answer_tokens)}</td>
+          <td style="font-weight:600">${formatNum(m.total_tokens)}</td>
+          <td style="color:#4ade80">${formatCost(cost)}</td>
+          <td style="color:#64748b;font-size:12px">${m.latency || '—'}</td>
+          <td><span class="model-tag">${m.model || '—'}</span></td>
+          <td><span class="badge ${isErr ? 'error' : 'success'}">${isErr ? 'error' : 'ok'}</span></td>
+        </tr>
+      `
+    }).join('')
+  }
+</script>
+
+</body>
+</html>

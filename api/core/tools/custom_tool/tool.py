@@ -1,37 +1,52 @@
 import json
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import getenv
 from typing import Any, Union
 from urllib.parse import urlencode
 
 import httpx
 
+from core.file.file_manager import download
 from core.helper import ssrf_proxy
 from core.tools.__base.tool import Tool
 from core.tools.__base.tool_runtime import ToolRuntime
 from core.tools.entities.tool_bundle import ApiToolBundle
 from core.tools.entities.tool_entities import ToolEntity, ToolInvokeMessage, ToolProviderType
 from core.tools.errors import ToolInvokeError, ToolParameterValidationError, ToolProviderCredentialValidationError
-from core.workflow.file.file_manager import download
 
 API_TOOL_DEFAULT_TIMEOUT = (
     int(getenv("API_TOOL_DEFAULT_CONNECT_TIMEOUT", "10")),
     int(getenv("API_TOOL_DEFAULT_READ_TIMEOUT", "60")),
 )
 
+BINARY_CONTENT_TYPES = {
+    "application/pdf",
+    "application/octet-stream",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip",
+    "application/x-zip-compressed",
+}
+
 
 @dataclass
 class ParsedResponse:
     """Represents a parsed HTTP response with type information"""
 
-    content: Union[str, dict]
+    content: Union[str, dict, bytes]
     is_json: bool
+    is_binary: bool = False
+    mime_type: str = ""
 
     def to_string(self) -> str:
         """Convert response to string format for credential validation"""
         if isinstance(self.content, dict):
             return json.dumps(self.content, ensure_ascii=False)
+        if isinstance(self.content, bytes):
+            return f"[Binary content: {self.mime_type}, {len(self.content)} bytes]"
         return str(self.content)
 
 
@@ -130,7 +145,7 @@ class ApiTool(Tool):
         """
         validate the response and return parsed content with type information
 
-        :return: ParsedResponse with content and is_json flag
+        :return: ParsedResponse with content, is_json, is_binary, and mime_type flags
         """
         if isinstance(response, httpx.Response):
             if response.status_code >= 400:
@@ -142,7 +157,16 @@ class ApiTool(Tool):
 
             # Check content type
             content_type = response.headers.get("content-type", "").lower()
+            # Strip parameters like charset (e.g. "application/pdf; charset=utf-8" → "application/pdf")
+            mime_type = content_type.split(";")[0].strip()
             is_json_content_type = "application/json" in content_type
+
+            # Detect binary responses (PDF, Office docs, zip, octet-stream, images, audio, video)
+            is_binary = mime_type in BINARY_CONTENT_TYPES or any(
+                mime_type.startswith(prefix) for prefix in ("image/", "audio/", "video/")
+            )
+            if is_binary:
+                return ParsedResponse(response.content, False, is_binary=True, mime_type=mime_type)
 
             # Try to parse as JSON
             try:
@@ -395,7 +419,13 @@ class ApiTool(Tool):
         parsed_response = self.validate_and_parse_response(response)
 
         # assemble invoke message based on response type
-        if parsed_response.is_json:
+        if parsed_response.is_binary:
+            assert isinstance(parsed_response.content, bytes)
+            yield self.create_blob_message(
+                blob=parsed_response.content,
+                meta={"mime_type": parsed_response.mime_type},
+            )
+        elif parsed_response.is_json:
             if isinstance(parsed_response.content, dict):
                 yield self.create_json_message(parsed_response.content)
 
