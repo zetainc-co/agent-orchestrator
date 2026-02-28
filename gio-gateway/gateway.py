@@ -64,6 +64,7 @@ def _cw_is_duplicate(msg_id: str) -> bool:
 @dataclass
 class TenantConfig:
     tenant_id:           str
+    tenant_slug:         str
     schema_name:         str
     phone_number_id:     str
     dify_app_key:        str
@@ -96,6 +97,7 @@ async def load_tenant_cache():
                 wc.verify_token,
                 wc.chatwoot_inbox_id,
                 t.id                   AS tenant_id,
+                t.slug                 AS tenant_slug,
                 t.schema_name,
                 dc.dify_app_key,
                 COALESCE(cc.chatwoot_account_id, t.chatwoot_account_id) AS chatwoot_account_id,
@@ -115,6 +117,7 @@ async def load_tenant_cache():
         try:
             new_cache[phone_id] = TenantConfig(
                 tenant_id           = str(row["tenant_id"]),
+                tenant_slug         = row["tenant_slug"],
                 schema_name         = row["schema_name"],
                 phone_number_id     = phone_id,
                 dify_app_key        = row["dify_app_key"],
@@ -232,18 +235,38 @@ async def meta_webhook(request: Request):
                 name_map = {c["wa_id"]: c.get("profile", {}).get("name", "") for c in contacts}
 
                 for msg in messages:
-                    if msg.get("type") != "text":
-                        log.info(f"[{config.schema_name}] Tipo {msg.get('type')!r} ignorado")
+                    msg_type    = msg.get("type")
+                    meta_msg_id = msg.get("id", "")
+                    phone       = msg["from"]
+                    name        = name_map.get(phone, phone)
+
+                    # ── Resolve message content ───────────────────────────
+                    if msg_type == "text":
+                        content = msg["text"]["body"].strip()
+
+                    elif msg_type == "audio":
+                        # Transcribe audio via Dify /audio-to-text
+                        media_id = msg["audio"]["id"]
+                        log.info(f"[{config.schema_name}] Audio recibido de {phone}, transcribiendo (media_id={media_id})")
+                        try:
+                            audio_bytes, mime_type = await meta_download_audio(media_id, config.meta_token)
+                            content = await dify_transcribe_audio(audio_bytes, mime_type, phone, config)
+                            if not content:
+                                log.warning(f"[{config.schema_name}] Transcripción vacía para {phone}, ignorando")
+                                continue
+                            log.info(f"[{config.schema_name}] Transcripción: {content[:80]!r}")
+                        except Exception as e:
+                            log.error(f"[{config.schema_name}] Error transcribiendo audio de {phone}: {e}")
+                            continue
+
+                    else:
+                        log.info(f"[{config.schema_name}] Tipo {msg_type!r} ignorado")
                         continue
 
-                    meta_msg_id = msg.get("id", "")
+                    # ── Deduplicate and dispatch ──────────────────────────
                     if await is_processed(meta_msg_id, config.schema_name):
                         log.info(f"[{config.schema_name}] Duplicado: {meta_msg_id}")
                         continue
-
-                    phone   = msg["from"]
-                    content = msg["text"]["body"].strip()
-                    name    = name_map.get(phone, phone)
 
                     await mark_processed(meta_msg_id, phone, content, config.schema_name)
                     log.info(f"[{config.schema_name}] Mensaje de {phone} ({name}): {content[:60]!r}")
@@ -426,6 +449,74 @@ async def set_human_control(phone: str, enabled: bool, schema: str):
         )
 
 
+# ── Booking URL resolver ──────────────────────────────────────────────────────
+# Placeholders the LLM might produce when it can't call the tool itself
+_BOOKING_PLACEHOLDERS = ("[BOOKING_URL]", "[bookingUrl]", "{{booking_url}}", "[URL_DE_AGENDAMIENTO]")
+
+async def resolve_booking_url(message: str, lead_id: str, tenant_id: str, schema: str) -> str:
+    """
+    If `message` contains a booking URL placeholder, call the NestJS booking API
+    to get the real URL and substitute it. Returns message unchanged if no placeholder found
+    or if the API call fails (logs warning).
+    """
+    if not any(p in message for p in _BOOKING_PLACEHOLDERS):
+        return message
+
+    if not lead_id or lead_id == "None":
+        log.warning(f"[{schema}] Booking placeholder found but lead_id is empty — skipping substitution")
+        return message
+
+    # Also strip instruction text the LLM may have leaked into the message
+    _LEAKED_INSTRUCTION_PATTERNS = [
+        "*** INSTRUCCIÓN TÉCNICA:",
+        "*** ACCIÓN OBLIGATORIA",
+        "*** NUNCA pongas",
+        "ANTES de enviar este mensaje",
+        "Reemplaza [BOOKING_URL]",
+        "Reemplaza {{booking_url}}",
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                f"{NELLA_BACKEND_URL}/booking/invitations",
+                json={"leadId": lead_id, "tenantId": tenant_id},
+                headers={"Content-Type": "application/json"},
+            )
+            r.raise_for_status()
+            body        = r.json()
+            # Response schema: { "data": { "bookingUrl": "...", "expiresAt": "..." } }
+            booking_url = body.get("data", {}).get("bookingUrl", "") or body.get("bookingUrl", "")
+
+        if not booking_url:
+            log.warning(f"[{schema}] Booking API returned no bookingUrl for lead_id={lead_id}")
+            return message
+
+        log.info(f"[{schema}] Booking URL resuelto: {booking_url}")
+
+        # Replace any variant of the placeholder with the real URL
+        result = message
+        for placeholder in _BOOKING_PLACEHOLDERS:
+            result = result.replace(placeholder, booking_url)
+
+        # Strip any leaked instruction lines
+        lines = result.splitlines()
+        clean_lines = [
+            line for line in lines
+            if not any(pat in line for pat in _LEAKED_INSTRUCTION_PATTERNS)
+        ]
+        # Also remove lines that look like instruction markers (*** ... ***)
+        clean_lines = [
+            line for line in clean_lines
+            if not (line.strip().startswith("***") and line.strip().endswith("***"))
+        ]
+        return "\n".join(clean_lines).strip()
+
+    except Exception as e:
+        log.warning(f"[{schema}] No se pudo resolver booking URL (lead_id={lead_id}): {e}")
+        return message
+
+
 # ── Main processing pipeline ──────────────────────────────────────────────────
 async def process(phone: str, name: str, text: str, config: TenantConfig):
     first_name       = name.split()[0] if name else phone
@@ -477,7 +568,7 @@ async def process(phone: str, name: str, text: str, config: TenantConfig):
 
     # 1. Call Dify
     dify_payload = {
-        "inputs":        {"contact_name": first_name},
+        "inputs":        {"contact_name": first_name, "lead_id": str(conv_data.get("contact_id", "")), "tenant_slug": config.tenant_slug},
         "query":         text,
         "user":          phone,
         "response_mode": "streaming",
@@ -563,6 +654,15 @@ async def process(phone: str, name: str, text: str, config: TenantConfig):
     ai_clasificacion = ai.get("ai_clasificacion", "")
     ai_etapa         = ai.get("ai_etapa", "")
 
+    # 2b. Booking URL substitution — resolve [BOOKING_URL] placeholder if present
+    #     The LLM may not call the tool itself; the gateway does it server-side instead.
+    response_message = await resolve_booking_url(
+        response_message,
+        lead_id=str(conv_data.get("contact_id", "")),
+        tenant_id=config.tenant_id,
+        schema=config.schema_name,
+    )
+
     log.info(
         f"[{config.schema_name}] {phone} | "
         f"etapa={ai_etapa} | clasificacion={ai_clasificacion} | handoff={handoff}"
@@ -584,10 +684,24 @@ async def process(phone: str, name: str, text: str, config: TenantConfig):
     except Exception as e:
         log.warning(f"[{config.schema_name}] upsert_contact error (non-critical): {e}")
 
-    # 4. Send response via Meta
-    await meta_send(phone, response_message, config)
+    # 3b. Notify NestJS directly → Socket.IO emits immediately to nella-frontend
+    #     (bypasses Chatwoot's Sidekiq webhook queue which may not be running)
+    if chatwoot_conv_id:
+        ts = int(time.time() * 1000)  # ms timestamp — unique per call, negative avoids collision with real Chatwoot IDs
+        asyncio.create_task(notify_nella_chat(
+            conv_id=int(chatwoot_conv_id), content=text,
+            msg_type="incoming", account_id=config.chatwoot_account_id,
+            is_private=False, msg_id=-(ts),
+            sender={"id": 0, "name": name, "type": "contact"},
+        ))
+        asyncio.create_task(notify_nella_chat(
+            conv_id=int(chatwoot_conv_id), content=response_message,
+            msg_type="outgoing", account_id=config.chatwoot_account_id,
+            is_private=True, msg_id=-(ts + 1),
+            sender={"id": 0, "name": "Gio AI", "type": "agent_bot"},
+        ))
 
-    # 5. Log to Chatwoot
+    # 4. Log to Chatwoot IMMEDIATELY (so nella-frontend panel updates without waiting the typing delay)
     try:
         chatwoot_acct  = str(config.chatwoot_account_id)
         chatwoot_token = config.chatwoot_token
@@ -621,15 +735,106 @@ async def process(phone: str, name: str, text: str, config: TenantConfig):
     except Exception as e:
         log.warning(f"[{config.schema_name}] Chatwoot log error (no critico): {e}")
 
+    # 5. Send response via Meta AFTER Chatwoot log (delay simula escritura humana, no afecta el panel)
+    await asyncio.sleep(5)
+    await meta_send(phone, response_message, config)
+
     # 5. Persist to PostgreSQL
     await save_conv(phone, new_dify_conv_id, chatwoot_conv_id, name, conv_data, config.schema_name)
     await log_messages(conv_data, text, response_message, config.schema_name)
 
-    # 6. Handoff
-    if handoff and chatwoot_conv_id:
-        await chatwoot_handoff(
-            chatwoot_conv_id, ai_clasificacion, ai_etapa, str(config.chatwoot_account_id), config.chatwoot_token,
+    # 6. Handoff — activate human control so AI doesn't respond to follow-up messages
+    if handoff:
+        try:
+            await set_human_control(phone, True, config.schema_name)
+            log.info(f"[{config.schema_name}] Handoff activado para {phone} — IA en pausa permanente hasta !ai")
+        except Exception as e:
+            log.warning(f"[{config.schema_name}] set_human_control error: {e}")
+        if chatwoot_conv_id:
+            await chatwoot_handoff(
+                chatwoot_conv_id, ai_clasificacion, ai_etapa, str(config.chatwoot_account_id), config.chatwoot_token,
+            )
+
+
+# ── Audio: download from Meta + transcribe via Dify ──────────────────────────
+async def meta_download_audio(media_id: str, meta_token: str) -> tuple[bytes, str]:
+    """Download audio file from Meta's media API. Returns (bytes, mime_type)."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Step 1: get download URL
+        r = await client.get(
+            f"https://graph.facebook.com/{META_API_VERSION}/{media_id}",
+            headers={"Authorization": f"Bearer {meta_token}"},
         )
+        r.raise_for_status()
+        info      = r.json()
+        url       = info["url"]
+        mime_type = info.get("mime_type", "audio/ogg")
+
+        # Step 2: download the actual file
+        r2 = await client.get(url, headers={"Authorization": f"Bearer {meta_token}"})
+        r2.raise_for_status()
+        return r2.content, mime_type
+
+
+async def _convert_to_mp3(audio_bytes: bytes) -> bytes:
+    """Convert audio bytes to mp3 via ffmpeg (pipe mode). Raises if ffmpeg not installed."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-i", "pipe:0", "-f", "mp3", "-ar", "16000", "-ac", "1", "-q:a", "4", "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=audio_bytes)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg error: {stderr.decode()[:300]}")
+    return stdout
+
+
+async def dify_transcribe_audio(audio_bytes: bytes, mime_type: str, phone: str, config: TenantConfig) -> str:
+    """
+    Send audio to Dify's /audio-to-text endpoint and return the transcript.
+    Dify supports: mp3, mp4, mpeg, mpga, m4a, wav, webm — NOT ogg directly.
+    WhatsApp sends ogg/opus, so we convert to mp3 via ffmpeg first.
+    """
+    base_mime = mime_type.split(";")[0].strip()
+
+    # Dify solo acepta: audio/mp3, audio/m4a, audio/wav, audio/amr, audio/mpga (constants.AUDIO_EXTENSIONS)
+    # audio/mpeg (estándar para MP3) NO está en la lista → 415. Enviamos "audio/mp3" para contenido mp3.
+    needs_conversion = "ogg" in base_mime or "opus" in base_mime
+    if needs_conversion:
+        try:
+            audio_bytes = await _convert_to_mp3(audio_bytes)
+            send_filename  = "audio.mp3"
+            send_mime_type = "audio/mp3"  # Dify whitelist usa audio/mp3, no audio/mpeg
+            log.info(f"Audio convertido a mp3 para transcripción Dify")
+        except Exception as e:
+            log.warning(f"ffmpeg no disponible o falló ({e}); Dify no acepta ogg/webm, puede devolver 415")
+            send_filename  = "audio.webm"
+            send_mime_type = "audio/webm"
+    else:
+        # Enviar con MIME que Dify acepte
+        ext_map = {
+            "audio/mpeg": ("mp3", "audio/mp3"),
+            "audio/mp3": ("mp3", "audio/mp3"),
+            "audio/mp4": ("m4a", "audio/m4a"),
+            "audio/x-m4a": ("m4a", "audio/m4a"),
+            "audio/wav": ("wav", "audio/wav"),
+            "audio/amr": ("amr", "audio/amr"),
+            "audio/mpga": ("mpga", "audio/mpga"),
+        }
+        entry = ext_map.get(base_mime, ("mp3", "audio/mp3"))
+        send_filename  = f"audio.{entry[0]}"
+        send_mime_type = entry[1]
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.post(
+            f"{DIFY_API_URL}/audio-to-text",
+            headers={"Authorization": f"Bearer {config.dify_app_key}"},
+            files={"file": (send_filename, audio_bytes, send_mime_type)},
+            data={"user": phone},
+        )
+        r.raise_for_status()
+        return r.json().get("text", "").strip()
 
 
 # ── Meta: send message ────────────────────────────────────────────────────────
@@ -820,6 +1025,44 @@ async def notify_contacts_updated():
             await client.post(f"{NELLA_BACKEND_URL}/contacts/notify")
     except Exception as e:
         log.debug(f"notify_contacts_updated error (non-critical): {e}")
+
+
+async def notify_nella_chat(
+    conv_id: int,
+    content: str,
+    msg_type: str,
+    account_id: int,
+    is_private: bool,
+    msg_id: int = 0,
+    sender: dict = None,
+):
+    """Direct fire-and-forget to NestJS /chatwoot/webhooks.
+    Bypasses Chatwoot's Sidekiq webhook delivery (which may not be running)
+    so nella-frontend Socket.IO updates happen instantly.
+    """
+    if not conv_id:
+        return
+    payload = {
+        "event": "message_created",
+        "id": msg_id,
+        "content": content,
+        "message_type": msg_type,
+        "private": is_private,
+        "created_at": int(time.time()),
+        "account": {"id": account_id},
+        "conversation": {"id": conv_id},
+        "sender": sender or {"id": 0, "name": "Bot", "type": "agent_bot"},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(
+                f"{NELLA_BACKEND_URL}/chatwoot/webhooks",
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+        log.debug(f"Direct NestJS chat notify sent — conv={conv_id} type={msg_type}")
+    except Exception as e:
+        log.debug(f"notify_nella_chat error (non-critical): {e}")
 
 
 async def _update_chatwoot_conv_id(conv_id: str, chatwoot_conv_id: str, schema: str):
