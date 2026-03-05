@@ -1085,6 +1085,8 @@ services:
   nginx:
     image: nginx:latest
     restart: always
+    ports:
+      - "18080:8080"
     volumes:
       - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template
       - ./nginx/proxy.conf.template:/etc/nginx/proxy.conf.template
