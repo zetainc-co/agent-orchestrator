@@ -1133,6 +1133,7 @@ services:
       - api
       - web
     labels:
+      - "deploy.version=2"
       - "traefik.enable=true"
       - "traefik.http.routers.dify-nginx.rule=Host(`agents-market-qa.zetainc.co`)"
       - "traefik.http.routers.dify-nginx.entrypoints=websecure"
