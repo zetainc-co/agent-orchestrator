@@ -829,6 +829,8 @@ services:
   web:
     image: langgenius/dify-web:1.13.0
     restart: always
+    labels:
+      - "deploy.version=1"
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
       APP_API_URL: ${APP_API_URL:-}
