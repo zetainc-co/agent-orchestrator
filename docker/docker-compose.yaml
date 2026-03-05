@@ -841,15 +841,6 @@ services:
   web:
     image: langgenius/dify-web:1.13.0
     restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.dify-web.rule=Host(`agents-market-qa.zetainc.co`)"
-      - "traefik.http.routers.dify-web.entrypoints=websecure"
-      - "traefik.http.routers.dify-web.tls=true"
-      - "traefik.http.routers.dify-web.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dify-web.priority=10"
-      - "traefik.http.services.dify-web-svc.loadbalancer.server.port=3000"
     networks:
       default:
         aliases:
