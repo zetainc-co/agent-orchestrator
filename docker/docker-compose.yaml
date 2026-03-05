@@ -1127,7 +1127,7 @@ services:
       - "traefik.http.routers.dify-nginx.entrypoints=websecure"
       - "traefik.http.routers.dify-nginx.tls=true"
       - "traefik.http.routers.dify-nginx.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dify-nginx.priority=100"
+      - "traefik.http.routers.dify-nginx.priority=10000"
       - "traefik.http.services.dify-nginx.loadbalancer.server.port=80"
       - "traefik.docker.network=dokploy-network"
     networks:
