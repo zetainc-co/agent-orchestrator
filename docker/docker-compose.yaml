@@ -718,15 +718,6 @@ services:
   api:
     image: langgenius/dify-api:1.13.0
     restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.dify-api.rule=Host(`agents-market-qa.zetainc.co`) && (PathPrefix(`/console/api`) || PathPrefix(`/api`) || PathPrefix(`/v1`) || PathPrefix(`/files`) || PathPrefix(`/mcp`) || PathPrefix(`/triggers`) || PathPrefix(`/e/`))"
-      - "traefik.http.routers.dify-api.entrypoints=websecure"
-      - "traefik.http.routers.dify-api.tls=true"
-      - "traefik.http.routers.dify-api.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dify-api.priority=100"
-      - "traefik.http.services.dify-api-svc.loadbalancer.server.port=5001"
     environment:
       # Use the shared environment variables.
       <<: *shared-api-worker-env
@@ -765,7 +756,6 @@ services:
       default:
         aliases:
           - dify-api
-      dokploy-network: {}
 
   # worker service
   # The Celery worker for processing all queues (dataset, workflow, mail, etc.)
@@ -841,23 +831,10 @@ services:
   web:
     image: langgenius/dify-web:1.13.0
     restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dokploy-network"
-      - "traefik.http.routers.dify-web.rule=Host(`agents-market-qa.zetainc.co`)"
-      - "traefik.http.routers.dify-web.entrypoints=websecure"
-      - "traefik.http.routers.dify-web.tls=true"
-      - "traefik.http.routers.dify-web.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dify-web.priority=10000"
-      - "traefik.http.services.dify-web-svc.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dify-web.service=dify-web-svc"
-    ports:
-      - "13000:3000"
     networks:
       default:
         aliases:
           - dify-web
-      dokploy-network: {}
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
       APP_API_URL: ${APP_API_URL:-}
@@ -1089,6 +1066,54 @@ services:
     networks:
       - ssrf_proxy_network
       - default
+
+  # Nginx reverse proxy — routes Traefik traffic to web/api containers
+  nginx:
+    image: nginx:latest
+    restart: always
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template
+      - ./nginx/proxy.conf.template:/etc/nginx/proxy.conf.template
+      - ./nginx/https.conf.template:/etc/nginx/https.conf.template
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/docker-entrypoint.sh:/docker-entrypoint-mount.sh
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "cp /docker-entrypoint-mount.sh /docker-entrypoint.sh && sed -i 's/\r$$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh && /docker-entrypoint.sh",
+      ]
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-_}
+      NGINX_HTTPS_ENABLED: "false"
+      NGINX_SSL_PORT: "443"
+      NGINX_PORT: "8080"
+      NGINX_SSL_CERT_FILENAME: "dify.crt"
+      NGINX_SSL_CERT_KEY_FILENAME: "dify.key"
+      NGINX_SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
+      NGINX_WORKER_PROCESSES: "auto"
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-100M}
+      NGINX_KEEPALIVE_TIMEOUT: "65"
+      NGINX_PROXY_READ_TIMEOUT: ${NGINX_PROXY_READ_TIMEOUT:-3600s}
+      NGINX_PROXY_SEND_TIMEOUT: ${NGINX_PROXY_SEND_TIMEOUT:-3600s}
+      NGINX_ENABLE_CERTBOT_CHALLENGE: "false"
+      CERTBOT_DOMAIN: ""
+    depends_on:
+      - api
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.dify-nginx.rule=Host(`agents-market-qa.zetainc.co`)"
+      - "traefik.http.routers.dify-nginx.entrypoints=websecure"
+      - "traefik.http.routers.dify-nginx.tls=true"
+      - "traefik.http.routers.dify-nginx.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dify-nginx.priority=10000"
+      - "traefik.http.services.dify-nginx-svc.loadbalancer.server.port=8080"
+      - "traefik.http.routers.dify-nginx.service=dify-nginx-svc"
+    networks:
+      - default
+      - dokploy-network
 
   # Certbot service
   # use `docker-compose --profile certbot up` to start the certbot service.
