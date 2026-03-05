@@ -925,9 +925,6 @@ services:
     restart: always
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:-difyai123456}
-    volumes:
-      # Redis data is kept in-memory only (no persistence) to avoid root-owned bind mount issues on Dokploy
-      # - ./volumes/redis/data:/data
     # Set the redis password when startup redis server.
     command: redis-server --requirepass ${REDIS_PASSWORD:-difyai123456} --save "" --appendonly no
     healthcheck:
