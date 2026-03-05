@@ -7,9 +7,9 @@ server {
     # Use Docker's embedded DNS for dynamic resolution (prevents caching wrong IPs at startup)
     resolver 127.0.0.11 valid=30s ipv6=off;
 
-    set $api_upstream http://api:5001;
-    set $web_upstream http://web:3000;
-    set $plugin_upstream http://plugin_daemon:5002;
+    set $api_upstream http://dify-api:5001;
+    set $web_upstream http://dify-web:3000;
+    set $plugin_upstream http://dify-plugin:5002;
 
     location /console/api {
       proxy_pass $api_upstream;

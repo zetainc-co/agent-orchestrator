@@ -753,7 +753,9 @@ services:
       - dify_app_storage:/app/api/storage
     networks:
       - ssrf_proxy_network
-      - default
+      default:
+        aliases:
+          - dify-api
 
   # worker service
   # The Celery worker for processing all queues (dataset, workflow, mail, etc.)
@@ -831,6 +833,10 @@ services:
     restart: always
     labels:
       - "deploy.version=1"
+    networks:
+      default:
+        aliases:
+          - dify-web
     environment:
       CONSOLE_API_URL: ${CONSOLE_API_URL:-}
       APP_API_URL: ${APP_API_URL:-}
@@ -1032,6 +1038,10 @@ services:
       seekdb:
         condition: service_healthy
         required: false
+    networks:
+      default:
+        aliases:
+          - dify-plugin
 
   # ssrf_proxy server
   # for more information, please refer to
