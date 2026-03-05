@@ -711,7 +711,7 @@ services:
         chown -R 1001:1001 /app/api/storage && touch "$${FLAG_FILE}"
         echo "Permissions initialized. Exiting."
     volumes:
-      - ./volumes/app/storage:/app/api/storage
+      - dify_app_storage:/app/api/storage
     restart: "no"
 
   # API service
@@ -750,7 +750,7 @@ services:
         condition: service_started
     volumes:
       # Mount the storage directory to the container, for storing user files.
-      - ./volumes/app/storage:/app/api/storage
+      - dify_app_storage:/app/api/storage
     networks:
       - ssrf_proxy_network
       - default
@@ -789,7 +789,7 @@ services:
         condition: service_started
     volumes:
       # Mount the storage directory to the container, for storing user files.
-      - ./volumes/app/storage:/app/api/storage
+      - dify_app_storage:/app/api/storage
     networks:
       - ssrf_proxy_network
       - default
@@ -874,7 +874,7 @@ services:
                -c 'statement_timeout=${POSTGRES_STATEMENT_TIMEOUT:-0}'
                -c 'idle_in_transaction_session_timeout=${POSTGRES_IDLE_IN_TRANSACTION_SESSION_TIMEOUT:-0}'
     volumes:
-      - ./volumes/db/data:/var/lib/postgresql/data
+      - dify_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
@@ -928,8 +928,8 @@ services:
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:-difyai123456}
     volumes:
-      # Mount the redis data directory to the container.
-      - ./volumes/redis/data:/data
+      # Redis data is kept in-memory only (no persistence) to avoid root-owned bind mount issues on Dokploy
+      # - ./volumes/redis/data:/data
     # Set the redis password when startup redis server.
     command: redis-server --requirepass ${REDIS_PASSWORD:-difyai123456} --save "" --appendonly no
     healthcheck:
@@ -956,7 +956,7 @@ services:
       SANDBOX_PORT: ${SANDBOX_PORT:-8194}
       PIP_MIRROR_URL: ${PIP_MIRROR_URL:-}
     volumes:
-      - ./volumes/sandbox/dependencies:/dependencies
+      - dify_sandbox_deps:/dependencies
       - ./volumes/sandbox/conf:/conf
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8194/health"]
@@ -1019,7 +1019,7 @@ services:
     ports:
       - "${EXPOSE_PLUGIN_DEBUGGING_PORT:-15003}:${PLUGIN_DEBUGGING_PORT:-5003}"
     volumes:
-      - ./volumes/plugin_daemon:/app/storage
+      - dify_plugin_daemon_data:/app/storage
     depends_on:
       db_postgres:
         condition: service_healthy
@@ -1633,3 +1633,7 @@ networks:
 volumes:
   oradata:
   dify_es01_data:
+  dify_postgres_data:
+  dify_app_storage:
+  dify_sandbox_deps:
+  dify_plugin_daemon_data:
