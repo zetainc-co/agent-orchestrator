@@ -925,6 +925,8 @@ services:
     restart: always
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:-difyai123456}
+    volumes:
+      - dify_redis_data:/data
     # Set the redis password when startup redis server.
     command: redis-server --requirepass ${REDIS_PASSWORD:-difyai123456} --save "" --appendonly no
     healthcheck:
@@ -1635,3 +1637,4 @@ volumes:
   dify_app_storage:
   dify_sandbox_deps:
   dify_plugin_daemon_data:
+  dify_redis_data:
