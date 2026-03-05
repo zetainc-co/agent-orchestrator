@@ -848,7 +848,7 @@ services:
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:1.13.0
+    image: zetainnovation/sebasagent-web:1.13.0-branded
     restart: always
     networks:
       default:
