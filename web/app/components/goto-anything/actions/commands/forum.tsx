@@ -8,11 +8,11 @@ import { registerCommands, unregisterCommands } from './command-bus'
 type ForumDeps = Record<string, never>
 
 /**
- * Forum command - Opens Dify community forum
+ * Forum command - Opens SebasAgent community forum
  */
 export const forumCommand: SlashCommandHandler<ForumDeps> = {
   name: 'forum',
-  description: 'Open Dify community forum',
+  description: 'Open SebasAgent community forum',
   mode: 'direct',
 
   // Direct execution function

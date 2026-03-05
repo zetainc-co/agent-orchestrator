@@ -38,7 +38,7 @@ const Blocks = ({
       sort: 0, // Default sort order
       type: block.type,
       title: block.title,
-      author: 'Dify',
+      author: 'SebasAgent',
       // @ts-expect-error Fix this missing field later
       description: block.description,
     },
