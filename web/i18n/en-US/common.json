@@ -1,7 +1,7 @@
 {
   "about.changeLog": "Changelog",
-  "about.latestAvailable": "Dify {{version}} is the latest version available.",
-  "about.nowAvailable": "Dify {{version}} is now available.",
+  "about.latestAvailable": "SebasAgent {{version}} is the latest version available.",
+  "about.nowAvailable": "SebasAgent {{version}} is now available.",
   "about.updateNow": "Update now",
   "account.account": "Account",
   "account.avatar": "Avatar",

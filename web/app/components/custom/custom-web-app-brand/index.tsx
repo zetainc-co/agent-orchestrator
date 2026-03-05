@@ -267,7 +267,7 @@ const CustomWebAppBrand = () => {
                   <div className="h-2 w-[144px] rounded-sm bg-text-quaternary opacity-20"></div>
                 </Button>
               </div>
-              <div className="flex h-[52px] w-[578px] items-center rounded-xl border border-components-chat-input-border bg-components-panel-bg-blur pl-3.5 text-text-placeholder shadow-md backdrop-blur-sm body-lg-regular">Talk to Dify</div>
+              <div className="flex h-[52px] w-[578px] items-center rounded-xl border border-components-chat-input-border bg-components-panel-bg-blur pl-3.5 text-text-placeholder shadow-md backdrop-blur-sm body-lg-regular">Talk to SebasAgent</div>
             </div>
           </div>
         </div>
