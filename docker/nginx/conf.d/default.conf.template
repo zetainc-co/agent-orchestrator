@@ -56,7 +56,12 @@ server {
       proxy_pass $api_upstream;
       include proxy.conf;
     }
-    
+
+    location /dify-health {
+      return 200 '{"service":"dify-nginx","version":"v2","web":"dify-web"}';
+      add_header Content-Type application/json;
+    }
+
     # placeholder for acme challenge location
     ${ACME_CHALLENGE_LOCATION}
 
