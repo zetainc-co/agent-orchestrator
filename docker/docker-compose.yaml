@@ -1123,7 +1123,7 @@ services:
       - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dify-qa.rule=Host(`agents-market.zetainc.co`)"
+      - "traefik.http.routers.dify-qa.rule=Host(`agents-market-qa.zetainc.co`)"
       - "traefik.http.routers.dify-qa.entrypoints=websecure"
       - "traefik.http.routers.dify-qa.tls=true"
       - "traefik.http.routers.dify-qa.tls.certresolver=letsencrypt"
