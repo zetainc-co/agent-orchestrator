@@ -35,7 +35,7 @@ export default function CheckEmail(props: DeleteAccountProps) {
       </div>
       <div className="body-md-regular pb-2 pt-1 text-text-secondary">
         {t('account.deletePrivacyLinkTip', { ns: 'common' })}
-        <Link href="https://dify.ai/privacy" className="text-text-accent">{t('account.deletePrivacyLink', { ns: 'common' })}</Link>
+        <Link href="#" className="text-text-accent">{t('account.deletePrivacyLink', { ns: 'common' })}</Link>
       </div>
       <label className="system-sm-semibold mb-1 mt-3 flex h-6 items-center text-text-secondary">{t('account.deleteLabel', { ns: 'common' })}</label>
       <Input

@@ -17,7 +17,7 @@ export const forumCommand: SlashCommandHandler<ForumDeps> = {
 
   // Direct execution function
   execute: () => {
-    const url = 'https://forum.dify.ai'
+    const url = 'https://sebasagent.com'
     window.open(url, '_blank', 'noopener,noreferrer')
   },
 
@@ -33,14 +33,14 @@ export const forumCommand: SlashCommandHandler<ForumDeps> = {
           <RiFeedbackLine className="h-4 w-4 text-text-tertiary" />
         </div>
       ),
-      data: { command: 'navigation.forum', args: { url: 'https://forum.dify.ai' } },
+      data: { command: 'navigation.forum', args: { url: 'https://sebasagent.com' } },
     }]
   },
 
   register(_deps: ForumDeps) {
     registerCommands({
       'navigation.forum': async (args) => {
-        const url = args?.url || 'https://forum.dify.ai'
+        const url = args?.url || 'https://sebasagent.com'
         window.open(url, '_blank', 'noopener,noreferrer')
       },
     })

@@ -154,7 +154,7 @@ export default function AppSelector() {
                         <MenuItem>
                           <Link
                             className={cn(itemClassName, 'group justify-between', 'data-[active]:bg-state-base-hover')}
-                            href="https://roadmap.dify.ai"
+                            href="#"
                             target="_blank"
                             rel="noopener noreferrer"
                           >

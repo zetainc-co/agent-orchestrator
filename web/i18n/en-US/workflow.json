@@ -507,7 +507,7 @@
   "nodes.http.verifySSL.warningTooltip": "Disabling SSL verification is not recommended for production environments. This should only be used in development or testing, as it makes the connection vulnerable to security threats like man-in-the-middle attacks.",
   "nodes.humanInput.deliveryMethod.added": "Added",
   "nodes.humanInput.deliveryMethod.contactTip1": "Missing a delivery method you need?",
-  "nodes.humanInput.deliveryMethod.contactTip2": "Tell us at <email>support@dify.ai</email>.",
+  "nodes.humanInput.deliveryMethod.contactTip2": "Tell us at <email>soporte@sebasagent.com</email>.",
   "nodes.humanInput.deliveryMethod.emailConfigure.allMembers": "All members ({{workspaceName}})",
   "nodes.humanInput.deliveryMethod.emailConfigure.body": "Body",
   "nodes.humanInput.deliveryMethod.emailConfigure.bodyPlaceholder": "Enter email body",
