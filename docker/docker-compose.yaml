@@ -920,15 +920,12 @@ services:
   # One-shot service to reset postgres password — REMOVE after password reset
   db_password_reset:
     image: postgres:15-alpine
+    entrypoint: ["sh", "-c"]
+    command: "psql postgresql://postgres@db_postgres:5432/${DB_DATABASE:-dify} -c \"ALTER USER postgres PASSWORD '${DB_PASSWORD:-difyai123456}'\""
     depends_on:
       db_postgres:
         condition: service_healthy
-    command: >
-      psql postgresql://postgres@db_postgres:5432/dify
-      -c "ALTER USER postgres PASSWORD 'difyai123456'"
     restart: "no"
-    networks:
-      - default
 
   # The mysql database.
   db_mysql:
