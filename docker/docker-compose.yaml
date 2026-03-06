@@ -891,7 +891,8 @@ services:
       POSTGRES_DB: ${DB_DATABASE:-dify}
       PGDATA: ${PGDATA:-/var/lib/postgresql/data/pgdata}
     command: >
-      postgres -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
+      postgres -c 'hba_file=/etc/postgresql/pg_hba_custom.conf'
+               -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
                -c 'shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}'
                -c 'work_mem=${POSTGRES_WORK_MEM:-4MB}'
                -c 'maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}'
@@ -900,6 +901,7 @@ services:
                -c 'idle_in_transaction_session_timeout=${POSTGRES_IDLE_IN_TRANSACTION_SESSION_TIMEOUT:-0}'
     volumes:
       - dify_postgres_data:/var/lib/postgresql/data
+      - ./postgres_hba_trust.conf:/etc/postgresql/pg_hba_custom.conf:ro
     healthcheck:
       test:
         [
