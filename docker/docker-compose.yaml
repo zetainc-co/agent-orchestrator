@@ -1084,6 +1084,7 @@ services:
       REVERSE_PROXY_PORT: ${SSRF_REVERSE_PROXY_PORT:-8194}
       SANDBOX_HOST: ${SSRF_SANDBOX_HOST:-sandbox}
       SANDBOX_PORT: ${SANDBOX_PORT:-8194}
+      EXTRA_ALLOWED_DOMAINS: ${SSRF_EXTRA_ALLOWED_DOMAINS:-}
     networks:
       - ssrf_proxy_network
       - default
