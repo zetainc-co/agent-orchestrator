@@ -891,8 +891,7 @@ services:
       POSTGRES_DB: ${DB_DATABASE:-dify}
       PGDATA: ${PGDATA:-/var/lib/postgresql/data/pgdata}
     command: >
-      postgres -c 'hba_file=/etc/postgresql/pg_hba_custom.conf'
-               -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
+      postgres -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
                -c 'shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}'
                -c 'work_mem=${POSTGRES_WORK_MEM:-4MB}'
                -c 'maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}'
@@ -901,7 +900,6 @@ services:
                -c 'idle_in_transaction_session_timeout=${POSTGRES_IDLE_IN_TRANSACTION_SESSION_TIMEOUT:-0}'
     volumes:
       - dify_postgres_data:/var/lib/postgresql/data
-      - ./postgres_hba_trust.conf:/etc/postgresql/pg_hba_custom.conf:ro
     healthcheck:
       test:
         [
@@ -917,16 +915,6 @@ services:
       interval: 1s
       timeout: 3s
       retries: 60
-
-  # One-shot: reset postgres password — REMOVE after confirmed working
-  db_password_reset:
-    image: postgres:15-alpine
-    entrypoint: ["sh", "-c"]
-    command: "psql postgresql://postgres@db_postgres:5432/dify -c \"ALTER USER postgres PASSWORD 'difyai123456'\""
-    depends_on:
-      db_postgres:
-        condition: service_healthy
-    restart: "no"
 
   # The mysql database.
   db_mysql:
